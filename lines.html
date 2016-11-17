@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="user-scalable=no, width=425">
+<title>Lines For Kate</title>
+<style type="text/css">
+html,body {
+  margin: 0;
+  background-color: #A1CAF1;
+}
+.ball {
+  width: 41px;
+  height: 41px;
+  border-radius: 40px;
+  background-image: radial-gradient(circle at 15px 10px, rgba(0, 0, 0, 0), black);
+  margin: 2px;
+  -webkit-transition: 320ms -webkit-transform linear;
+  transition: 320ms transform linear;
+  -webkit-transform: translate3d(0, 0, 0);
+  transform: translate3d(0, 0, 0);
+}
+.colour-1 { /* yellow */
+  background-color: #F3C300;
+}
+.colour-2 { /* purple */
+  background-color: #875692;
+}
+.colour-3 { /* orange */
+  background-color: #F38400;
+}
+.colour-4 { /* red */
+  background-color: #BE0032;
+}
+.colour-5 { /* buff */
+  background-color: #C2B280;
+}
+.colour-6 { /* green */
+  background-color: #008856;
+}
+.colour-7 { /* blue */
+  background-color: #0067A5;
+}
+#surface {
+  max-width: 425px;
+  overflow: hidden;
+}
+#board {
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  user-select: none;
+  max-height: 425px;
+  width: 100%;
+
+  display: -webkit-flex;
+  display: flex;
+  -webkit-flex-direction: row;
+  flex-direction: row;
+  -webkit-flex-wrap: wrap;
+  flex-wrap: wrap;
+}
+.square {
+  background-color: #81AAD1;
+  width: 45px;
+  height: 45px;
+  margin: 1px;
+}
+#title {
+  display: -webkit-flex;
+  display: flex;
+  -webkit-flex-direction: row;
+  flex-direction: row;
+  -webkit-justify-content: space-around;
+  justify-content: space-around;
+  font-size: 1.5rem;
+  font-family: sans-serif;
+}
+#scores, #actions {
+  display: -webkit-flex;
+  display: flex;
+  -webkit-flex-direction: row;
+  flex-direction: row;
+  -webkit-justify-content: space-between;
+  justify-content: space-between;
+  color: black;
+  font-size: 1.3rem;
+  font-family: sans-serif;
+  padding: 0.5rem;
+}
+button {
+  height: 2rem;
+  min-width: 6rem;
+}
+.shrink {
+  -webkit-transform: scale(0.4);
+  transform: scale(0.4);
+}
+.bounce {
+  -webkit-animation: bounce 0.2s infinite alternate;
+  -moz-animation: bounce 0.2s infinite alternate;
+}
+@-webkit-keyframes bounce {
+  from { -webkit-transform: translateZ(0) scale(1); transform: translateZ(0) scale(1); }
+  to { -webkit-transform: translateZ(0) scale(1.15); transform: translateZ(0) scale(1.15); }
+}
+@-moz-keyframes bounce {
+  from { transform: translateZ(0) scale(1); }
+  to { transform: translateZ(0) scale(1.15); }
+}
+</style>
+<style type="text/css" id="throwaway">
+</style>
+</head>
+<body>
+<div id="surface">
+<div id="title">Lines for Kate</div>
+<div id="actions">
+  <button id="newgame">New Game</button>
+  <button id="undo" disabled>Undo</button>
+</div>
+<div id="scores">
+  <div>Score: <span id="score">0</span></div>
+  <div>High Score: <span id="highscore">0</span></div>
+</div>
+<div id="board">
+  <div class="square"></div>
+  <div class="ball colour-1"></div>
+  <div class="ball colour-2"></div>
+  <div class="ball colour-3"></div>
+  <div class="ball colour-4"></div>
+  <div class="ball colour-5"></div>
+  <div class="ball colour-6"></div>
+  <div class="ball colour-7"></div>
+</div>
+</div>
+<script type="text/javascript">
+var NUM_START_GAME_BALLS = 6,
+    NUM_COLOURS = 7,
+    NUM_BALLS_ADDED_PER_ROUND = 3,
+    NUM_BALLS_FOR_LINE = 5,
+    SCORE_PER_BALL = 10,
+    NUM_ROWS = 9,
+    NUM_COLS = 9,
+    NUM_SQUARES = NUM_ROWS * NUM_COLS,
+    SQUARE_WIDTH = SQUARE_HEIGHT = 45,
+    OBSTACLE = 50000;
+    MARGIN_X = MARGIN_Y = 1;
+
+var boardElt = document.getElementById('board');
+
+var _score = 0,
+    _previousScore = 0,
+    _undo;
+
+function ballAt(location) {
+  return !!boardElt.children[location].querySelector('.ball');
+}
+
+function checkAndMark(board, val, x, y) {
+  if (board[x][y] === OBSTACLE) {
+    return true;
+  }
+  if (board[x][y] === undefined) {
+    board[x][y] = val;
+    return false;
+  }
+}
+
+function spread(board, val, dstX, dstY) {
+  var expanded = false;
+  for (var i = 0; i < NUM_COLS; i++) {
+    for (var j = 0; j < NUM_ROWS; j++) {
+      if (board[i][j] === val - 1) {
+        for (var x = 1; i + x < NUM_COLS; x++) {
+          var res = checkAndMark(board, val, i + x, j);
+          expanded |= (res === false);
+          if (res) {
+            break;
+          }
+          if (i + x === dstX && j === dstY) {
+            return true;
+          }
+        }
+        for (var x = 1; i - x >= 0; x++) {
+          var res = checkAndMark(board, val, i - x, j);
+          expanded |= (res === false);
+          if (res) {
+            break;
+          }
+          if (i - x === dstX && j === dstY) {
+            return true;
+          }
+        }
+        for (var y = 1; j + y < NUM_ROWS; y++) {
+          var res = checkAndMark(board, val, i, j + y);
+          expanded |= (res === false);
+          if (res) {
+            break;
+          }
+          if (i === dstX && j + y === dstY) {
+            return true;
+          }
+        }
+        for (var y = 1; j - y >= 0; y++) {
+          var res = checkAndMark(board, val, i, j - y);
+          expanded |= (res === false);
+          if (res) {
+            break;
+          }
+          if (i === dstX && j - y === dstY) {
+            return true;
+          }
+        }
+      }
+    }
+  }
+  return !expanded; // return true if we couldn't spread. Failure case.
+}
+
+function getRoute(board, srcX, srcY, dstX, dstY) {
+  var route = [];
+  for (var routeLength = board[dstX][dstY]; routeLength >= 0; routeLength--) {
+    var blockedX = false,
+        blockedXNeg = false,
+        blockedY = false,
+        blockedYNeg = false;
+    for (var segmentLength = 1; segmentLength < Math.max(NUM_ROWS, NUM_COLS); segmentLength++) {
+      blockedX |= dstX + segmentLength >= NUM_COLS || board[dstX + segmentLength][dstY] > routeLength;
+      blockedXNeg |= dstX - segmentLength < 0 || board[dstX - segmentLength][dstY] > routeLength;
+      blockedY |= dstY + segmentLength >= NUM_ROWS || board[dstX][dstY + segmentLength] > routeLength;
+      blockedYNeg |= dstY - segmentLength < 0 || board[dstX][dstY - segmentLength] > routeLength;
+      if (!blockedX && board[dstX + segmentLength][dstY] < routeLength) {
+        route.push([segmentLength, 0]);
+        dstX += segmentLength;
+        break;
+      } else if (!blockedXNeg && board[dstX - segmentLength][dstY] < routeLength) {
+        route.push([-segmentLength, 0]);
+        dstX -= segmentLength;
+        break;
+      } else if (!blockedY && board[dstX][dstY + segmentLength] < routeLength) {
+        route.push([0, segmentLength]);
+        dstY += segmentLength;
+        break;
+      } else if (!blockedYNeg && board[dstX][dstY - segmentLength] < routeLength) {
+        route.push([0, -segmentLength]);
+        dstY -= segmentLength;
+        break;
+      }
+    }
+  }
+  return route;
+}
+
+function animateRoute(ball, route) {
+  var totalLength = 0;
+  for (var i = 0; i < route.length; i++) {
+    totalLength += Math.abs(route[i][0] + route[i][1]); // works because [0] or [1] is guaranteed 0
+  }
+  var dx = 0,
+      dy = 0,
+      squaresMoved = 0;
+  var sheet = document.getElementById('throwaway');
+  var keyframes = 'keyframes moveball { ' +
+    '0% { transform: translate(0, 0); }';
+  for (var i = route.length - 1; i >= 0; --i) {
+    dx += -route[i][0];
+    dy += -route[i][1];
+    squaresMoved += Math.abs(route[i][0] + route[i][1]);
+    keyframes += Math.round(squaresMoved / totalLength * 100) + '% {' +
+      '-webkit-transform: translate3d(' + (dx * SQUARE_WIDTH + (dx ? (dx * 2 * MARGIN_X - MARGIN_X) : 0)) + 'px, ' +
+      (dy * SQUARE_WIDTH + (dy ? (dy * 2 * MARGIN_X - MARGIN_X) : 0)) + 'px, 0); ' +
+      'transform: translate3d(' + (dx * SQUARE_WIDTH + (dx ? (dx * 2 * MARGIN_X - MARGIN_X) : 0)) + 'px, ' +
+      (dy * SQUARE_WIDTH + (dy ? (dy * 2 * MARGIN_X - MARGIN_X) : 0)) + 'px, 0); } ';
+  }
+  sheet.textContent = '@-webkit-' + keyframes + '}\n@-moz-' + keyframes + '}';
+  ball.style.webkitTransition = 'initial';
+  ball.style.transition = 'initial';
+  ball.style.webkitAnimation = 'moveball linear ' + Math.min(600, totalLength * 60) + 'ms';
+  ball.style.animation = 'moveball linear ' + Math.min(600, totalLength * 60) + 'ms';
+}
+
+function undo() {
+  document.getElementById('undo').disabled = true;
+  boardElt.parentNode.replaceChild(_undo, boardElt);
+  boardElt = _undo;
+  _score = _previousScore;
+  increaseScore(0);
+  Array.prototype.forEach.call(document.querySelectorAll('.square'), function (square) {
+    square.addEventListener('click', squareClick);
+  });
+}
+
+function move(ball, src, dest) {
+  if (src === dest) {
+    return false;
+  }
+  var board = [],
+      srcX = src % NUM_COLS,
+      srcY = Math.floor(src / NUM_ROWS),
+      dstX = dest % NUM_COLS,
+      dstY = Math.floor(dest / NUM_ROWS);
+  for (var i = 0; i < NUM_ROWS; i++) {
+    board.push(Array(NUM_COLS));
+  }
+  var length = 0;
+  Array.prototype.forEach.call(document.querySelectorAll('.ball:not(.shrink)'), function (ball) {
+    var location = Array.prototype.indexOf.call(boardElt.children, ball.parentElement);
+    board[location % NUM_COLS][Math.floor(location / NUM_ROWS)] = OBSTACLE;
+  });
+  board[srcX][srcY] = length;
+  // Holy Crap this is expensive.
+  while (!spread(board, ++length, dstX, dstY)) {};
+  if (!board[dstX][dstY]) {
+    return false;
+  }
+  // Success! Save the board and score in case of Undo
+  _undo = boardElt.cloneNode(true);
+  _previousScore = _score;
+  document.getElementById('undo').disabled = false;
+  var route = getRoute(board, srcX, srcY, dstX, dstY);
+  var eventName = navigator.userAgent.indexOf('Firefox') > 0 ? 'animationend' : 'webkitAnimationEnd';
+  ball.addEventListener(eventName, function reparent() {
+    ball.style.webkitAnimation = '';
+    ball.style.animation = '';
+    ball.style.webkitTransition = '';
+    ball.style.transition = '';
+    ball.removeEventListener(eventName, reparent);
+    boardElt.children[dest].appendChild(ball);
+    doneTurn(ball, src, dest);
+  });
+  animateRoute(ball, route);
+  return true;
+}
+
+function checkLineball(lineball, colourClass, line, lines) {
+  if (lineball && lineball.classList.contains(colourClass)) {
+    line.push(lineball);
+  } else if (line.length >= NUM_BALLS_FOR_LINE) {
+    lines.push(line.slice());
+    line.length = 0;
+  } else {
+    line.length = 0;
+  }
+}
+
+function increaseScore(howMuch) {
+  _score += howMuch;
+  document.getElementById('score').textContent = _score;
+  if (_score > localStorage.getItem('highscore')) {
+    // New High Score!
+    localStorage.setItem('highscore', _score);
+    document.getElementById('highscore').textContent = _score;
+  }
+}
+
+function findLine(ball) {
+  var colourClass;
+  Array.prototype.some.call(ball.classList, function (className) {
+    if (className.indexOf('colour-') === 0) {
+      colourClass = className;
+      return true;
+    }
+  });
+  var location = Array.prototype.indexOf.call(boardElt.children, ball.parentElement),
+      x = location % NUM_COLS,
+      y = Math.floor(location / NUM_ROWS);
+  var lines = [];
+  var line = [],
+      lineball;
+  for (var i = 0; i < NUM_COLS; i++) {
+    lineball = boardElt.children[y * 9 + i].querySelector('.ball:not(.shrink)');
+    checkLineball(lineball, colourClass, line, lines);
+  }
+  checkLineball(undefined, colourClass, line, lines);
+  line = [];
+  for (var j = 0; j < NUM_ROWS; j++) {
+    lineball = boardElt.children[j * 9 + x].querySelector('.ball:not(.shrink)');
+    checkLineball(lineball, colourClass, line, lines);
+  }
+  checkLineball(undefined, colourClass, line, lines);
+  line = [];
+  // Diagonals suck.
+  // Top-right bottom-left
+  if (x + y < NUM_COLS) { // intersects top
+    for (var m = 0; m < x + y + 1; m++) {
+      lineball = boardElt.children[m * (NUM_COLS - 1) + x + y].querySelector('.ball:not(.shrink)');
+      checkLineball(lineball, colourClass, line, lines);
+    }
+  } else { // intersects right
+    for (var m = 0; m < (NUM_COLS + NUM_ROWS) - (x + y + 1); m++) {
+      lineball = boardElt.children[m * (NUM_COLS - 1) + (y - (NUM_COLS - 1 - x)) * NUM_COLS + (NUM_COLS - 1)].querySelector('.ball:not(.shrink)');
+      checkLineball(lineball, colourClass, line, lines);
+    }
+  }
+  checkLineball(undefined, colourClass, line, lines);
+  line = [];
+  //Top-left bottom-right
+  if (x - y >= 0) { // intersects top
+    for (var m = 0; m < (NUM_COLS - 1) - (x - y) + 1; m++) {
+      lineball = boardElt.children[m * (NUM_COLS + 1) + (x - y)].querySelector('.ball:not(.shrink)');
+      checkLineball(lineball, colourClass, line, lines);
+    }
+  } else { // intersects left
+    for (var m = 0; m < NUM_COLS - (y - x); m++) {
+      lineball = boardElt.children[m * (NUM_COLS + 1) + (NUM_COLS * (y - x))].querySelector('.ball:not(.shrink)');
+      checkLineball(lineball, colourClass, line, lines);
+    }
+  }
+  checkLineball(undefined, colourClass, line, lines);
+  line = [];
+  lines.forEach(function (line) {
+    line.forEach(function (removeBall) {
+      removeBall.addEventListener('transitionend', function () {
+        if (removeBall.parentElement) { // could've been removed once already. Score it twice for cleverness
+          removeBall.parentElement.removeChild(removeBall);
+        }
+        increaseScore(SCORE_PER_BALL);
+      });
+      removeBall.clientHeight; // force layout
+      removeBall.classList.add('shrink');
+    });
+  });
+  return lines.length;
+}
+
+function doneTurn(ball, src, dest) {
+  // Game Mechanic: if you stomp a ball, it'll reposition to the square you just came from
+  if (ball) {
+    var stompedBall = boardElt.children[dest].querySelector('.shrink');
+    if (stompedBall) {
+      boardElt.children[src].appendChild(stompedBall);
+      stompedBall.clientHeight;
+    }
+    if (findLine(ball)) {
+      // lucky you, no extra balls this round
+      return;
+    }
+  }
+  Array.prototype.forEach.call(document.querySelectorAll('.shrink'), function (shrunkBall) {
+    shrunkBall.classList.remove('shrink');
+    shrunkBall.clientHeight;
+    shrunkBall.addEventListener('transitionend', function findaline() {
+      shrunkBall.removeEventListener('transitionend', findaline);
+      findLine(shrunkBall);
+    });
+  });
+  if (document.querySelectorAll('.ball:not(.shrink)').length >= NUM_SQUARES) {
+    gameOver(); // man, Game Over.
+  }
+  for (var i = 0; i < NUM_BALLS_ADDED_PER_ROUND; i++) {
+    var newball = addRandomBall();
+    if (newball) {
+      newball.classList.add('shrink');
+    }
+  }
+}
+
+function squareClick(evt) {
+  var ball = this.querySelector('.ball:not(.shrink)'),
+      currentBall = document.querySelector('.bounce');
+  if (currentBall) {
+    currentBall.classList.remove('bounce');
+  }
+  if (ball && ball !== currentBall) {
+    ball.classList.add('bounce');
+  }
+  if (currentBall && !ball) {
+    // trying to make a move
+    var src = Array.prototype.indexOf.call(boardElt.children, currentBall.parentElement);
+    var dest = Array.prototype.indexOf.call(boardElt.children, this);
+    if (!move(currentBall, src, dest)) {
+      // can't get there from here. Show that somehow?
+      // at any rate, keep bouncing
+      currentBall.classList.add('bounce');
+    }
+  }
+}
+
+function addBall(location, colour) {
+  var ball = document.createElement('div');
+  ball.className = 'ball colour-' + colour;
+  boardElt.children[location].appendChild(ball);
+  return ball;
+}
+
+function removeAllBalls() {
+  Array.prototype.forEach.call(boardElt.querySelectorAll('.ball'), function (ball) {
+    ball.parentElement.removeChild(ball);
+  });
+}
+
+function addRandomBall() {
+  if (document.querySelectorAll('.ball').length >= NUM_SQUARES) {
+    return;
+  }
+  var location,
+      colour = Math.round(Math.random() * NUM_COLOURS);
+  do {
+    location = Math.max(0, Math.round(Math.random() * NUM_SQUARES) - 1); // 0-based
+  } while (ballAt(location));
+  return addBall(location, colour);
+}
+
+function startGame() {
+  _score = 0;
+  increaseScore(0);
+  if (localStorage.getItem('highscore')) {
+    document.getElementById('highscore').textContent = localStorage.getItem('highscore');
+  }
+  removeAllBalls();
+  for (var i = 0; i < NUM_START_GAME_BALLS; i++) {
+    addRandomBall();
+  }
+  doneTurn();
+}
+
+board.innerHTML = '';
+for (var i = 0; i < 81; i++) {
+  board.innerHTML += '<div class="square"></div>';
+}
+Array.prototype.forEach.call(document.querySelectorAll('.square'), function (square) {
+  square.addEventListener('click', squareClick);
+});
+startGame();
+
+document.getElementById('newgame').addEventListener('click', startGame);
+document.getElementById('undo').addEventListener('click', undo);
+</script>
+</body>
+</html>
